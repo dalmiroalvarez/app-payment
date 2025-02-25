@@ -1,25 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, TextInput, TouchableOpacity, Modal, Platform, 
-  StatusBar, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback
+  View, Text, TextInput, TouchableOpacity, Platform, 
+  StatusBar, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
+  Modal
 } from 'react-native';
 import CurrencySelector from '../components/CurrencySelector';
 
-export default function CreatePaymentScreen({ navigation }) {
-  const [amount, setAmount] = useState('');
-  const [formattedAmount, setFormattedAmount] = useState('0.00');
-  const [currency, setCurrency] = useState({ code: 'USD', symbol: '$' });
-  const [concept, setConcept] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
+export default function PaymentConfirmationScreen({ navigation, route }) {
 
-  const handleContinue = () => {
-    // Navegar a la pantalla de confirmación de pago
-    navigation.navigate('PaymentConfirmation', {
-      amount: formattedAmount,
-      currency: currency,
-      concept: concept
-    });
+  const { amount: initialAmount, currency: initialCurrency, concept: initialConcept } = route.params || { 
+    amount: '0.00', 
+    currency: { code: 'USD', symbol: '$', name: 'Dólar Estadounidense', flag: require('../../assets/images/USA-FLAG.png') }, 
+    concept: '' 
   };
+
+  const [amount, setAmount] = useState(initialAmount);
+  const [formattedAmount, setFormattedAmount] = useState(initialAmount);
+  const [concept, setConcept] = useState(initialConcept || '');
+  const [isFocused, setIsFocused] = useState(false);
+  const [currency, setCurrency] = useState(initialCurrency);
+  const [showCurrencySelector, setShowCurrencySelector] = useState(false);
+
+  const symbolPosition = currency.code === 'EUR' || currency.code === 'GBP' ? 'right' : 'left';
 
   const formatAmount = (value) => {
     if (!value) return '0.00';
@@ -40,8 +42,32 @@ export default function CreatePaymentScreen({ navigation }) {
     setFormattedAmount(formatAmount(value));
   };
 
-  // Determina si el símbolo va a la izquierda o derecha según el código de moneda
-  const symbolPosition = currency.code === 'EUR' || currency.code === 'GBP' ? 'right' : 'left';
+  const handleCurrencySelect = (selectedCurrency) => {
+    setCurrency(selectedCurrency);
+    setShowCurrencySelector(false);
+  };
+
+  const isFormComplete = formattedAmount !== '0.00' && concept.trim() !== '';
+
+  const buttonStyle = {
+    ...styles.button,
+    backgroundColor: isFormComplete ? '#035AC5' : '#EAF3FF',
+  };
+
+  const buttonTextStyle = {
+    ...styles.buttonText,
+    color: isFormComplete ? '#FFFFFF' : '#71B0FD',
+  };
+
+  const handleContinue = () => {
+    if (isFormComplete) {
+      navigation.navigate('SharePayment', {
+        amount: formattedAmount,
+        currency: currency,
+        concept: concept
+      });
+    }
+  };
 
   return (
     <KeyboardAvoidingView 
@@ -51,33 +77,30 @@ export default function CreatePaymentScreen({ navigation }) {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.inner}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Crear pago</Text>
+            <Text style={styles.headerTitle}>Importe a pagar</Text>
+            {/* Currency Selector en el header */}
             <TouchableOpacity 
-              style={styles.currencySelector} 
-              onPress={() => setModalVisible(true)}
+              style={styles.currencySelector}
+              onPress={() => setShowCurrencySelector(true)}
             >
-              <Text style={styles.currencyText}>{currency.code}</Text>
-              <Text style={styles.arrowDown}>▼</Text>
+              <Text style={styles.currencySelectorText}>{currency.code}</Text>
+              <Text style={styles.currencySelectorSymbol}>{currency.symbol}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.divider} />
           <View style={styles.amountContainer}>
             <View style={styles.amountInputWrapper}>
-              {/* Mostrar símbolo a la izquierda solo si no es EUR o GBP */}
               {symbolPosition === 'left' && (
                 <Text style={styles.currencySymbol}>{currency.symbol}</Text>
               )}
-              
               <TextInput
-                style={styles.amountInput}
+                style={[styles.amountInput, { color: '#035AC5' }]}
                 value={formattedAmount === '0.00' ? '' : formattedAmount}
                 onChangeText={handleAmountChange}
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor="#C0CCDA"
               />
-              
-              {/* Mostrar símbolo a la derecha solo si es EUR o GBP */}
               {symbolPosition === 'right' && (
                 <Text style={styles.currencySymbol}>{currency.symbol}</Text>
               )}
@@ -87,33 +110,42 @@ export default function CreatePaymentScreen({ navigation }) {
             <Text style={styles.label}>Concepto</Text>
             <View style={styles.inputWrapper}>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  isFocused && { borderColor: '#035AC5', borderWidth: 1 }
+                ]}
                 placeholder="Añade descripción del pago"
                 value={concept}
                 onChangeText={setConcept}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                maxLength={140}
               />
+              <Text style={styles.charCounter}>{concept.length}/140 caracteres</Text>
             </View>
           </View>
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
-              style={styles.button} 
+              style={buttonStyle} 
               onPress={handleContinue}
+              disabled={!isFormComplete}
             >
-              <Text style={styles.buttonText}>Continuar</Text>
+              <Text style={buttonTextStyle}>Continuar</Text>
             </TouchableOpacity>
           </View>
-          <Modal visible={modalVisible} animationType="slide">
-            <CurrencySelector 
-              onClose={() => setModalVisible(false)}
-              onSelect={(selectedCurrency) => {
-                setCurrency(selectedCurrency);
-                setModalVisible(false);
-              }}
-              selectedCurrency={currency}
-            />
-          </Modal>
         </View>
       </TouchableWithoutFeedback>
+      <Modal
+        visible={showCurrencySelector}
+        animationType="slide"
+        transparent={false}
+      >
+        <CurrencySelector
+          onClose={() => setShowCurrencySelector(false)}
+          onSelect={handleCurrencySelect}
+          selectedCurrency={currency}
+        />
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -146,22 +178,24 @@ const styles = {
   },
   currencySelector: {
     position: 'absolute',
-    right: 15,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: '#E8EAF0',
-    borderRadius: 24,
+    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#EAF3FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  currencyText: {
+  currencySelectorText: {
     fontSize: 16,
-    color: '#002859',
+    fontWeight: '600',
+    color: '#035AC5',
     marginRight: 5,
   },
-  arrowDown: {
-    fontSize: 12,
-    color: '#002859',
+  currencySelectorSymbol: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#035AC5',
   },
   divider: {
     borderBottomWidth: 1,
@@ -183,14 +217,13 @@ const styles = {
   currencySymbol: {
     fontSize: 60,
     fontWeight: 'bold',
-    color: '#C0CCDA',
+    color: '#035AC5',
     marginLeft: 5,
     marginRight: 5,
   },
   amountInput: {
     fontSize: 60,
     fontWeight: 'bold',
-    color: '#C0CCDA',
     minWidth: 100,
     textAlign: 'center',
   },
@@ -219,20 +252,24 @@ const styles = {
     fontSize: 16,
     width: '100%',
   },
+  charCounter: {
+    alignSelf: 'flex-end',
+    marginTop: 5,
+    color: '#647184',
+    fontSize: 12,
+  },
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
     marginBottom: 15,
   },
   button: {
-    backgroundColor: '#EAF3FF',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
     width: '90%',
   },
   buttonText: {
-    color: '#71B0FD',
     fontSize: 16,
     fontWeight: 'bold',
   },
